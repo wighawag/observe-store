@@ -57,8 +57,8 @@ store.on('counter:updated', (patches) => {
 });
 
 // Update counter
-store.update((draft) => {
-  draft.counter += 1;
+store.update((state) => {
+  state.counter += 1;
 });
 
 console.log(store.get('counter')); // { value: 1 }
@@ -87,8 +87,8 @@ store.on('counter:updated', (patches) => {
 });
 
 // Update counter
-store.update((draft) => {
-  draft.counter += 1;
+store.update((state) => {
+  state.counter += 1;
 });
 
 console.log(store.get('counter')); // { value: 1 }
@@ -130,9 +130,9 @@ store.on('user:updated', (patches) => {
 });
 
 // Update user
-store.update((draft) => {
-  draft.user.name = 'Jane Doe';
-  draft.user.age = 31;
+store.update((state) => {
+  state.user.name = 'Jane Doe';
+  state.user.age = 31;
 });
 
 // Subscribe to settings changes
@@ -141,9 +141,9 @@ const unsubscribe = store.on('settings:updated', (patches) => {
 });
 
 // Update settings
-store.update((draft) => {
-  draft.settings.theme = 'dark';
-  draft.settings.notifications = false;
+store.update((state) => {
+  state.settings.theme = 'dark';
+  state.settings.notifications = false;
 });
 
 // Unsubscribe later
@@ -178,8 +178,8 @@ store.subscribe.counter((counter) => {
 // Output: Counter value: 0
 
 // Update counter - callback fires again with new value
-store.update((draft) => {
-  draft.counter += 1;
+store.update((state) => {
+  state.counter += 1;
 });
 // Output: Counter value: 1
 
@@ -192,8 +192,8 @@ const unsubscribe = store.subscribe.user((user) => {
 // Unsubscribe from user updates
 unsubscribe();
 
-store.update((draft) => {
-  draft.user.name = 'Jane';
+store.update((state) => {
+  state.user.name = 'Jane';
 });
 // No callback fired (unsubscribed)
 ```
@@ -245,14 +245,14 @@ store.on('items:updated', (patches) => {
 });
 
 // Add item
-store.update((draft) => {
-  draft.items.push(4);
+store.update((state) => {
+  state.items.push(4);
 });
 
 // Update todos
-store.update((draft) => {
-  draft.todos.push({ id: 2, text: 'Build apps', done: false });
-  draft.todos[0].done = true;
+store.update((state) => {
+  state.todos.push({ id: 2, text: 'Build apps', done: false });
+  state.todos[0].done = true;
 });
 ```
 
@@ -280,14 +280,14 @@ const unsubscribe1 = store.onKeyed('users:updated', 'user-1', (patches) => {
 });
 
 // Update user-1
-store.update((draft) => {
-  draft.users['user-1'].name = 'Johnny';
+store.update((state) => {
+  state.users['user-1'].name = 'Johnny';
 });
 // Only the user-1 callback fires
 
 // Update user-2
-store.update((draft) => {
-  draft.users['user-2'].name = 'Janet';
+store.update((state) => {
+  state.users['user-2'].name = 'Janet';
 });
 // The user-1 callback does NOT fire
 
@@ -304,9 +304,9 @@ const unsubscribe = store.onKeyed('users:updated', '*', (userId, patches) => {
   console.log(`User ${userId} changed:`, patches);
 });
 
-store.update((draft) => {
-  draft.users['user-1'].name = 'Johnny';
-  draft.user['user-2'].name = 'Janet';
+store.update((state) => {
+  state.users['user-1'].name = 'Johnny';
+  state.user['user-2'].name = 'Janet';
 });
 
 unsubscribe();
@@ -333,8 +333,8 @@ store.onKeyed('todos:updated', 0, (patches) => {
   console.log('First todo changed:', patches);
 });
 
-store.update((draft) => {
-  draft.todos[0].done = true;
+store.update((state) => {
+  state.todos[0].done = true;
 });
 // Only the first todo callback fires
 ```
@@ -349,13 +349,13 @@ store.onceKeyed('users:updated', 'user-1', (patches) => {
   console.log('User 1 changed once:', patches);
 });
 
-store.update((draft) => {
-  draft.users['user-1'].name = 'Johnny';
+store.update((state) => {
+  state.users['user-1'].name = 'Johnny';
 });
 // Callback fires once
 
-store.update((draft) => {
-  draft.users['user-1'].name = 'John';
+store.update((state) => {
+  state.users['user-1'].name = 'John';
 });
 // Callback does NOT fire again
 ```
@@ -371,15 +371,15 @@ const callback2 = (patches) => console.log('Callback 2:', patches);
 store.onKeyed('users:updated', 'user-1', callback1);
 store.onKeyed('users:updated', 'user-1', callback2);
 
-store.update((draft) => {
-  draft.users['user-1'].name = 'Johnny';
+store.update((state) => {
+  state.users['user-1'].name = 'Johnny';
 });
 // Both callbacks fire
 
 store.offKeyed('users:updated', 'user-1', callback1);
 
-store.update((draft) => {
-  draft.users['user-1'].name = 'John';
+store.update((state) => {
+  state.users['user-1'].name = 'John';
 });
 // Only callback2 fires
 ```
@@ -406,8 +406,8 @@ const unsubscribe2 = store.on('count:updated', (patches) => {
   console.log('Subscriber 2:', patches);
 });
 
-store.update((draft) => {
-  draft.count += 1;
+store.update((state) => {
+  state.count += 1;
 });
 
 // Both subscribers receive the event
@@ -484,17 +484,17 @@ const store = createObservableStore(
 
 ### `ObservableStore<T>`
 
-#### `update(mutate: (draft: T) => void): void`
+#### `update(mutate: (state: T) => void): void`
 
 Updates the state and emits an event with the patches.
 
 **Parameters:**
-- `mutate` - Mutation function that receives a draft of the field value
+- `mutate` - Mutation function that receives a state of the field value
 
 **Example:**
 ```typescript
-store.update((draft) => {
-  draft.user.name = 'Jane';
+store.update((state) => {
+  state.user.name = 'Jane';
 });
 ```
 
@@ -707,12 +707,12 @@ type State = {
 const store = createObservableStore<State>({ ... });
 
 // ✅ Valid
-store.update('user', (draft) => {
-  draft.name = 'Jane';
+store.update('user', (state) => {
+  state.name = 'Jane';
 });
 
 // ❌ Type error: Invalid field name
-store.update('invalid', (draft) => {
+store.update('invalid', (state) => {
   // Type error
 });
 
@@ -789,8 +789,8 @@ store.on('users:updated', (patches) => {
   console.log('Regular event:', patches);
 });
 
-store.update('users', (draft) => {
-  draft['user-1'] = { name: 'John' };
+store.update('users', (state) => {
+  state['user-1'] = { name: 'John' };
 });
 // Only regular event is emitted
 
@@ -799,8 +799,8 @@ store.onKeyed('users:updated', 'user-1', (patches) => {
   console.log('Keyed event:', patches);
 });
 
-store.update('users', (draft) => {
-  draft['user-1'].name = 'Jane';
+store.update('users', (state) => {
+  state['user-1'].name = 'Jane';
 });
 // Both regular and keyed events are emitted
 ```
@@ -843,8 +843,8 @@ const store = createObservableStore<BetterState>({
   flag: { value: false }
 });
 
-store.update('count', (draft) => {
-  draft.value += 1;
+store.update('count', (state) => {
+  state.value += 1;
 });
 ```
 

@@ -127,14 +127,12 @@ export type Patch = {
 
 export type Patches = Patch[];
 
-export type Draft<T> = T;
-
 export type RecordPatchesFunction = <T extends NonPrimitive>(
 	state: T,
-	mutate: (state: Draft<T>) => void,
+	mutate: (state: T) => void,
 ) => Patches;
 
 export type CreateFunction = <T extends NonPrimitive>(
 	state: T,
-	mutate: (state: Draft<T>) => void,
+	mutate: (state: T) => void,
 ) => [T, Patches];

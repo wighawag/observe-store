@@ -1,24 +1,65 @@
 # AGENTS.md
 
-This document provides guidance for AI agents working on the `observe-store` project.
+This document provides guidance for AI agents working on the `observator` project.
 
 ## Project Overview
 
-**observe-store** is a TypeScript library that provides a type-safe mutative store. It uses:
-- [mutative](https://github.com/unadlib/mutative) for immutable state updates and patch generation
+**observator** is a TypeScript library that provides a type-safe observable store. It uses:
+- [patch-recorder](https://github.com/wighawag/patch-recorder) for immutable state updates and patch generation (default)
 - [radiate](https://github.com/wighawag/radiate) for type-safe event emission
 
-The store emits events for each top-level field change with JSON Patch arrays, enabling fine-grained reactivity.
+The store allows any custom patch generation library (mutative, immer, etc.) and emits events for each top-level field change with JSON Patch arrays, enabling fine-grained reactivity.
 
 ## Key Design Decisions
 
-### 1. Non-Primitive Type Constraint
+### 1. Patch Generation Library Agnostic
 
-**Critical:** Top-level fields must be objects or arrays, NOT primitives.
+The library is designed to work with any patch generation library that follows a specific interface. By default, it uses [patch-recorder](https://github.com/wighawag/patch-recorder) which:
+- Provides minimal overhead while keeping object references
+- Uses mutable objects internally
+- Generates JSON Patch (RFC 6902) arrays
 
-**Reason:** `mutative` requires objects or arrays to generate JSON patches. When you call `mutative.create()` on a primitive value (number, string, boolean), it returns empty patches.
+Users can optionally use other libraries like:
+- **mutative**: High-performance immutable state updates with array optimizations
+- **immer**: Well-known immutable state management with JSON patch support
 
-**Pattern for primitives:** Wrap primitives in objects:
+**Important:** Different patch generation libraries may have different requirements:
+- `patch-recorder` (default): Works with any values, uses mutable references
+- `mutative/immer`: May require objects/arrays at field level to generate patches properly
+
+### 2. State Update Model
+
+**Critical:** The store updates the FULL state, not individual fields.
+
+When calling [`update()`](src/index.ts:106), you receive a state of the entire state and can modify multiple fields in a single call. The store then:
+1. Groups patches by top-level field
+2. Emits events for each field that changed
+3. Provides both regular events (`${field}:updated`) and keyed events for fine-grained subscriptions
+
+**Example:**
+```typescript
+type State = {
+  user: { name: string };
+  counter: { value: number };
+  items: string[];
+};
+
+// Update multiple fields in one call
+store.update((state) => {
+  state.user.name = 'Jane';
+  state.counter.value += 1;
+  state.items.push('new');
+});
+// Emits: 'user:updated', 'counter:updated', 'items:updated'
+```
+
+### 3. Non-Primitive Considerations
+
+While the library is designed to be flexible, some patch generation libraries may have restrictions:
+- **patch-recorder (default)**: Works with any values including primitives
+- **mutative/immer**: May require objects or arrays to generate patches properly
+
+For maximum compatibility across all patch generation libraries, wrap primitives in objects:
 ```typescript
 // ❌ Don't do this
 type BadState = {
@@ -31,7 +72,7 @@ type GoodState = {
 };
 ```
 
-### 2. Event Naming Convention
+### 4. Event Naming Convention
 
 Events are named as `${fieldName}:updated` (e.g., `user:updated`, `counter:updated`).
 
@@ -40,15 +81,17 @@ This is enforced by TypeScript types:
 type EventName<K extends string> = `${K}:updated`;
 ```
 
-### 3. Patch Structure
+### 5. Patch Structure
 
-Patches are generated relative to the field being updated:
-- For `{ count: { value: 0 } }`, updating `value` produces: `[{ op: 'replace', path: ['value'], value: 1 }]`
-- For `{ user: { name: 'John' } }`, updating `name` produces: `[{ op: 'replace', path: ['name'], value: 'Jane' }]`
+Patches are generated for the full state and grouped by top-level field:
+- For state `{ count: { value: 0 } }`, updating `state.count.value = 1` produces: `[{ op: 'replace', path: ['count', 'value'], value: 1 }]`
+- For state `{ user: { name: 'John' } }`, updating `state.user.name = 'Jane'` produces: `[{ op: 'replace', path: ['user', 'name'], value: 'Jane' }]`
+
+The patches are grouped by field, so `user:updated` event receives patches with paths starting with `['user', ...]`.
 
 All patches follow [JSON Patch (RFC 6902)](https://datatracker.ietf.org/doc/html/rfc6902) format.
 
-### 4. Type Safety
+### 6. Type Safety
 
 The library provides comprehensive type safety:
 - Only valid field names can be used in `update()`
@@ -64,65 +107,125 @@ type NonPrimitive = object | Array<unknown>;
 
 type EventName<K extends string> = `${K}:updated`;
 
-type EventMap<T extends Record<string, NonPrimitive>> = {
-  [K in keyof T as EventName<K & string>]: Patches<true>;
-};
+type EventNames<T> = EventName<keyof T & string>;
 
-export class ObservableStore<T extends Record<string, NonPrimitive>> {
-  private emitter: Emitter<EventMap<T>>;
+type KeyedObservableEventMap<T> = KeyedEventMap<ExtractKeyType<T[T[keyof T]]>, EventNames<T>>;
+
+export class ObservableStore<T extends Record<string, unknown> & NonPrimitive> {
+  private emitter: Emitter<any, KeyedObservableEventMap<T>>;
+  public subscriptions: SubscriptionsMap<T>;
+  public keyedSubscriptions: KeyedSubscriptionsMap<T>;
+  private create: CreateFunction;
   // ...
+}
+```
+
+### Patch Generation Interface
+
+The library accepts any function that matches the `CreateFunction` interface:
+```typescript
+type CreateFunction = <T extends NonPrimitive>(
+  state: T,
+  mutate: (state: T) => void
+) => [T, Patches];
+```
+
+Default implementation using patch-recorder:
+```typescript
+function createFromPatchRecorder<T extends NonPrimitive>(
+  state: T,
+  mutate: (state: T) => void,
+): [T, Patches] {
+  return [state, recordPatches<T>(state, mutate)];
 }
 ```
 
 ### Key Methods
 
-1. **`update<K>(key: K, mutate: (draft: Draft<T[K]>) => void): void`**
-   - Updates a specific field
-   - Emits `${key}:updated` event with patches
-   - Only mutates `this.state[key]`, not the entire state
+1. **`update(mutate: (state: T) => void): Patches`**
+   - Updates the full state with a mutation function
+   - Receives a state of the entire state
+   - Groups patches by top-level field
+   - Emits `${field}:updated` events for each changed field
+   - Conditionally emits keyed events when listeners exist
+   - Returns all patches
 
-2. **`get<K>(name: K): T[K]`**
+2. **`get<K>(name: K): Readonly<T[K]>`**
    - Gets current value of a field
    - Returns readonly reference
 
-3. **`on<K>(event: EventName<K>, callback: (patches: Patches<true>) => void): () => void`**
+3. **`on<K>(event: EventName<K>, callback: (patches: Patches) => void): () => void`**
    - Subscribes to field updates
    - Returns unsubscribe function
 
-4. **`off<K>(event: EventName<K>, callback: (patches: Patches<true>) => void): void`**
+4. **`off<K>(event: EventName<K>, callback: (patches: Patches) => void): void`**
    - Removes a specific event listener
    - Must pass the exact callback function used in `on()`
 
-5. **`once<K>(event: EventName<K>, callback: (patches: Patches<true>) => void): () => void`**
+5. **`once<K>(event: EventName<K>, callback: (patches: Patches) => void): () => void`**
    - Subscribes to a single emission of an event
    - Automatically unsubscribes after the first callback
    - Returns unsubscribe function to remove listener before it fires
 
-6. **`getState(): T`**
+6. **`onKeyed<K>(event: EventName<K>, key: Key | '*', callback): () => void`**
+   - Subscribes to updates for a specific key within a field
+   - Supports wildcard `'*'` for all keys
+   - Returns unsubscribe function
+
+7. **`offKeyed<K>(event: EventName<K>, key: Key, callback): void`**
+   - Unsubscribes a specific listener from a keyed event
+
+8. **`onceKeyed<K>(event: EventName<K>, key: Key | '*', callback): () => void`**
+   - Subscribes to a keyed event for a single emission only
+   - Supports wildcard `'*'`
+   - Returns unsubscribe function
+
+9. **`getState(): Readonly<T>`**
    - Returns shallow copy of entire state
+
+10. **`subscribe: SubscriptionsMap<T>`**
+    - Object with keys matching all state fields
+    - Each field provides a subscribe function that:
+      - Executes callback immediately with current value
+      - Executes callback on every field change
+      - Returns unsubscribe function
+
+11. **`keyedSubscriptions: KeyedSubscriptionsMap<T>`**
+    - Object with keys matching all state fields
+    - Each field provides a function that takes a key and returns a subscribe function
+    - Supports value-based subscriptions for specific keys
 
 ### Type System Limitations
 
-There's a known TypeScript limitation with string literal types in the internal `emit` implementation:
+There are known TypeScript limitations with string literal types and generic event maps:
 
 ```typescript
-// Internal implementation uses type assertion
-this.emitter.emit(eventName, patches as any);
+// Internal implementation uses type assertions
+this.emitter.emit(eventName, fieldPatches);
+this.emitter.emitKeyed(eventName, changedKey as any, fieldPatches as any);
 ```
 
-**Why:** When accessing `EventMap<T>[keyof EventMap<T>]`, TypeScript sees this as a union of all patch types. Even though all events have the same type (`Patches<true>`), TypeScript can't verify this due to limitations with generic string literal types and mapped types.
+**Why:** When working with generic string literal types (`EventNames<T>`) and keyed event maps, TypeScript can't always verify the exact type match due to limitations with generic type inference and mapped types.
 
-**Important:** This limitation only affects internal implementation details. The public API (`update()`, `on()`, `get()`, `getState()`) provides full type safety and does not require any type assertions from users.
+**Important:** These limitations only affect internal implementation details. The public API provides full type safety:
+- `update()` - Only accepts valid mutation functions
+- `on()`/`once()`/`off()` - Only accepts valid event names
+- `onKeyed()`/`onceKeyed()`/`offKeyed()` - Type-safe key access
+- `subscribe` / `keyedSubscriptions` - Type-safe field access
 
 ## Development Guidelines
 
 ### Adding Features
 
-1. **Maintain type safety:** Any new methods should preserve the generic type `T` and enforce the non-primitive constraint.
+1. **Maintain type safety:** Any new methods should preserve the generic type `T`.
 
-2. **Test with both objects and arrays:** Ensure features work with complex objects and arrays.
+2. **Support multiple patch generation libraries:** Ensure features work with both patch-recorder (default) and optional libraries like mutative/immer.
 
-3. **Test primitive wrappers:** Verify that primitive wrapper pattern works correctly.
+3. **Test with both objects and arrays:** Ensure features work with complex objects and arrays.
+
+4. **Test keyed events:** Verify that keyed subscriptions work correctly for Records and Arrays.
+
+5. **Test value-based subscriptions:** Ensure `subscribe` API provides immediate execution and correct values.
 
 ### Testing Patterns
 
@@ -146,41 +249,42 @@ const store = createObservableStore<State>({ ... });
 const callback = vi.fn();
 store.on('counter:updated', callback);
 
-store.update('counter', (draft) => {
-  draft.value += 1;
+store.update((state) => {
+  state.counter.value += 1;
 });
 
 expect(callback).toHaveBeenCalledWith([
-  { op: 'replace', path: ['value'], value: 1 }
+  { op: 'replace', path: ['counter', 'value'], value: 1 }
 ]);
 ```
 
 ### Common Pitfalls
 
-1. **Forgetting to wrap primitives:** Always check if a state type includes primitives and suggest wrapping them.
+1. **Assuming patches are relative to field:** Patches are relative to the full state root, not to individual fields. The store groups them by top-level field but the patch paths start from root.
 
 2. **Trying to emit on entire state:** Events are only emitted per-field, not for the entire state.
 
-3. **Assuming patches are relative to root:** Patches are relative to the field being updated, not the entire state object.
+3. **Mutating state directly:** Always use the [`update()`](src/index.ts:106) method with the state, never mutate `this.state` directly.
 
-4. **Mutating state directly:** Always use the `update` method with the draft, never mutate `this.state` directly.
+4. **Forgetting keyed events only emit when listeners exist:** Keyed events are conditionally emitted for performance. They only fire when there are active keyed listeners.
+
+5. **Using wrong patch generation library:** Some libraries (mutative, immer) may require objects/arrays at field level to generate patches, while patch-recorder works with any values.
 
 ## File Structure
 
 ```
 src/
 ├── index.ts       # Main implementation (ObservableStore class)
-├── types.ts       # Type utilities (currently empty, types in index.ts)
+├── types.ts       # Type utilities (EventName, Patches, etc.)
 test/
 ├── index.test.ts  # Comprehensive test suite
-examples/
-└── simple.ts      # Usage examples
 ```
 
 ## Dependencies
 
-- **mutative:** Provides `create()`, `Draft`, and `Patches` types
-- **radiate:** Provides `createEmitter()` and `Emitter` type
+- **patch-recorder:** Default patch generation library (mutable, keeps references)
+- **radiate:** Provides `createEmitter()`, `Emitter` type, and keyed event support
+- **mutative:** Optional dependency for immutable state updates
 
 ## Build System
 
@@ -191,7 +295,7 @@ examples/
 Run tests: `pnpm test`
 Build: `pnpm build`
 Format: `pnpm format`
-Run examples: `pnpm tsx examples/<filename>.ts`
+Watch build: `pnpm dev`
 
 ## Example Usage Patterns
 
@@ -205,8 +309,8 @@ const store = createObservableStore<State>({
   counter: { value: 0 }
 });
 
-store.update('counter', (draft) => {
-  draft.value += 1;
+store.update((state) => {
+  state.counter.value += 1;
 });
 ```
 
@@ -222,8 +326,8 @@ const store = createObservableStore<State>({
   }
 });
 
-store.update('users', (draft) => {
-  draft['2'] = { name: 'Jane', email: 'jane@example.com' });
+store.update((state) => {
+  state.users['2'] = { name: 'Jane', email: 'jane@example.com' };
 });
 ```
 
@@ -237,23 +341,24 @@ const store = createObservableStore<State>({
   todos: []
 });
 
-store.update('todos', (draft) => {
-  draft.push({ id: 1, text: 'Learn TypeScript', done: false });
+store.update((state) => {
+  state.todos.push({ id: 1, text: 'Learn TypeScript', done: false });
 });
 ```
 
 ## When to Use This Library
 
-Use mutative-emitter (ObservableStore) when you need:
+Use observator (ObservableStore) when you need:
 - Fine-grained reactivity (know exactly which field changed)
 - Type-safe event subscriptions
 - JSON Patch support for change tracking
-- Immutable state updates with minimal boilerplate
+- Patch generation library agnostic (use patch-recorder, mutative, immer, or custom)
+- Value-based subscriptions with immediate execution
+- Keyed subscriptions for Record/Array fields
 
 ## When NOT to Use This Library
 
 Consider alternatives if:
-- You need primitive values at top level (use immer or similar)
 - You need complex middleware or plugin system (use Redux, Zustand)
 - You need time-travel debugging (use Redux with proper middleware)
 - You have very simple state that doesn't need fine-grained events (use plain React state)
@@ -261,15 +366,16 @@ Consider alternatives if:
 ## Contributing
 
 When contributing:
-1. Maintain the non-primitive constraint
+1. Maintain type safety with generic type `T`
 2. Add tests for new features
-3. Update documentation in README.md
+3. Update documentation in README.md and AGENTS.md
 4. Ensure TypeScript compilation passes
 5. Format code with Prettier
 
 ## Questions?
 
 If you encounter issues with:
-- Type errors: Check if you're trying to use primitives at top level
-- Empty patches: Verify you're mutating an object/array, not a primitive
+- Type errors: Check your state type definitions and event names
+- Empty patches: Verify you're using a compatible patch generation library
 - Event not firing: Ensure you're using correct event name format (`${field}:updated`)
+- Keyed events not firing: Check that you have active keyed listeners (they're conditional)

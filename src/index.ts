@@ -1,7 +1,6 @@
 import {createEmitter, type Emitter, type KeyedEventMap} from 'radiate';
 import {recordPatches} from 'patch-recorder';
 import {
-	Draft,
 	EventName,
 	EventNames,
 	ExtractKeyType,
@@ -17,7 +16,7 @@ import {
 
 function createFromPatchRecorder<T extends NonPrimitive>(
 	state: T,
-	mutate: (state: Draft<T>) => void,
+	mutate: (state: T) => void,
 ): [T, Patches] {
 	return [state, recordPatches<T>(state, mutate)];
 }
@@ -59,10 +58,10 @@ type RecursiveMap<Key, Value> = Map<Key, {value?: Value; children?: RecursiveMap
  * });
  *
  * // Update multiple fields at once
- * store.update((draft) => {
- *   draft.user.name = 'Jane';
- *   draft.count += 1;
- *   draft.items.push('c');
+ * store.update((state) => {
+ *   state.user.name = 'Jane';
+ *   state.count += 1;
+ *   state.items.push('c');
  *   // Emits 'user:updated', 'count:updated', and 'items:updated' events
  * });
  * ```
@@ -91,19 +90,19 @@ export class ObservableStore<T extends Record<string, unknown> & NonPrimitive> {
 	/**
 	 * Update the full state and emit events for each field that changed
 	 *
-	 * @param mutate - Mutation function that receives a draft of the full state
+	 * @param mutate - Mutation function that receives a state of the full state
 	 *
 	 * @example
 	 * ```ts
 	 * // Update multiple fields at once
-	 * store.update((draft) => {
-	 *   draft.user.name = 'Jane';
-	 *   draft.count += 1;
-	 *   draft.items.push('c');
+	 * store.update((state) => {
+	 *   state.user.name = 'Jane';
+	 *   state.count += 1;
+	 *   state.items.push('c');
 	 * });
 	 * ```
 	 */
-	public update(mutate: (draft: Draft<T>) => void): Patches {
+	public update(mutate: (state: T) => void): Patches {
 		const [newState, patches] = this.create(this.state, mutate);
 		this.state = newState;
 
