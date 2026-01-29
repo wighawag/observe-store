@@ -21,6 +21,10 @@ function createFromPatchRecorder<T extends NonPrimitive>(
 	return [state, recordPatches<T>(state, mutate)];
 }
 
+export type ObservableStoreOptions = {
+	createFunction?: CreateFunction;
+};
+
 /**
  * Type-safe observable store that emits events for each top-level field change.
  *
@@ -62,10 +66,13 @@ export class ObservableStore<T extends Record<string, NonPrimitive>> {
 	public subscriptions: SubscriptionsMap<T>;
 	public keyedSubscriptions: KeyedSubscriptionsMap<T>;
 
+	private create: CreateFunction;
+
 	constructor(
 		protected state: T,
-		protected create: CreateFunction = createFromPatchRecorder,
+		protected options?: ObservableStoreOptions,
 	) {
+		this.create = options?.createFunction ?? createFromPatchRecorder;
 		this.emitter = createEmitter();
 		this.subscriptions = this.createSubscribeHandlers();
 		this.keyedSubscriptions = this.createKeyedSubscribeHandlers();
@@ -437,15 +444,16 @@ export class ObservableStore<T extends Record<string, NonPrimitive>> {
  */
 export function createObservableStore<T extends Record<string, NonPrimitive>>(
 	state: T,
-	create?: CreateFunction,
+	options?: ObservableStoreOptions,
 ): ObservableStore<T> {
-	return new ObservableStore(state, create);
+	return new ObservableStore(state, options);
 }
 
-export function createObservableStoreFactory(create: CreateFunction) {
+export function createObservableStoreFactory(factoryOptions: ObservableStoreOptions) {
 	return function createObservableStore<T extends Record<string, NonPrimitive>>(
 		state: T,
+		options?: ObservableStoreOptions,
 	): ObservableStore<T> {
-		return new ObservableStore(state, create);
+		return new ObservableStore(state, options ? {...factoryOptions, ...options} : factoryOptions);
 	};
 }
