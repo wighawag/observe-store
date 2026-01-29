@@ -9,8 +9,8 @@ importers:
   .:
     dependencies:
       patch-recorder:
-        specifier: ^0.2.0
-        version: 0.2.0
+        specifier: ^0.2.1
+        version: 0.2.1
       radiate:
         specifier: ^0.3.1
         version: 0.3.1
@@ -532,8 +532,8 @@ packages:
   obug@2.1.1:
     resolution: {integrity: sha512-uTqF9MuPraAQ+IsnPf366RG4cP9RtUi7MLO1N3KEc+wb0a6yKpeL0lmk2IB1jY5KHPAlTc6T/JRdC/YqxHNwkQ==}
 
-  patch-recorder@0.2.0:
-    resolution: {integrity: sha512-funnMi/83kXDdvnAJ91XPIErYEH9SB9+/rAQ7q4Nq2ly/h31DDWCUVnCCvk/v+DgAbkKe35bKkFD0GgjgZ8Rdg==}
+  patch-recorder@0.2.1:
+    resolution: {integrity: sha512-yl2+cX9c9n+ErgCYharI6Kyt0TfGgwUs8FedVfPdpu3crY165CpWD+mrAH2/Sefbi8ILBYLXJwtnRr5AxyQVhw==}
 
   pathe@2.0.3:
     resolution: {integrity: sha512-WUjGcAqP1gQacoQe+OBJsFA7Ld4DyXuUIjZ5cc75cLHvJ7dtNsTugphxIADwspS+AraAUePCKrSVtPLFj/F88w==}
@@ -1038,7 +1038,7 @@ snapshots:
 
   obug@2.1.1: {}
 
-  patch-recorder@0.2.0: {}
+  patch-recorder@0.2.1: {}
 
   pathe@2.0.3: {}
 
