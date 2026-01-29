@@ -5,7 +5,7 @@ This document provides guidance for AI agents working on the `observator` projec
 ## Project Overview
 
 **observator** is a TypeScript library that provides a type-safe observable store. It uses:
-- [patch-recorder](https://github.com/wighawag/patch-recorder) for immutable state updates and patch generation (default)
+- [patch-recorder](https://github.com/wighawag/patch-recorder) for mutable state updates and patch generation (default)
 - [radiate](https://github.com/wighawag/radiate) for type-safe event emission
 
 The store allows any custom patch generation library (mutative, immer, etc.) and emits events for each top-level field change with JSON Patch arrays, enabling fine-grained reactivity.

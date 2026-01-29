@@ -1,6 +1,6 @@
 # observator
 
-A type-safe store that emits events for each top-level field change. Uses [patch-recorder](https://github.com/wighawag/patch-recorder) by default for immutable updates with JSON Patch generation, but you can use any compatible library (e.g., mutative or immer). Uses [radiate](https://github.com/wighawag/radiate) for type-safe event emission.
+A type-safe store that emits events for each top-level field change. Uses [patch-recorder](https://github.com/wighawag/patch-recorder) by default for mutative updates with JSON Patch generation, but you can use any compatible library (e.g., mutative or immer). Uses [radiate](https://github.com/wighawag/radiate) for type-safe event emission.
 
 ## Features
 
