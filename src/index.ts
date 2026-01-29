@@ -1,16 +1,6 @@
 import {createEmitter, type Emitter, type KeyedEventMap} from 'radiate';
-import {create} from 'patch-recorder';
-
-export function mutativeAdapter(createFromMutative: any): CreateFunction {
-	return (state, mutate) => {
-		return createFromMutative(state, mutate, {enablePatches: true});
-	};
-}
-
-const createFromRecorder = mutativeAdapter(create);
-
+import {recordPatches} from 'patch-recorder';
 import {
-	CreateFunction,
 	Draft,
 	EventName,
 	EventNames,
@@ -21,7 +11,15 @@ import {
 	NonPrimitive,
 	Patches,
 	SubscriptionsMap,
+	CreateFunction,
 } from './types.js';
+
+function createFromPatchRecorder<T extends NonPrimitive>(
+	state: T,
+	mutate: (state: Draft<T>) => void,
+): [T, Patches] {
+	return [state, recordPatches<T>(state, mutate)];
+}
 
 /**
  * Type-safe observable store that emits events for each top-level field change.
@@ -66,7 +64,7 @@ export class ObservableStore<T extends Record<string, NonPrimitive>> {
 
 	constructor(
 		protected state: T,
-		protected create: CreateFunction = createFromRecorder,
+		protected create: CreateFunction = createFromPatchRecorder,
 	) {
 		this.emitter = createEmitter();
 		this.subscriptions = this.createSubscribeHandlers();
@@ -133,7 +131,7 @@ export class ObservableStore<T extends Record<string, NonPrimitive>> {
 	 */
 	public on<K extends keyof T>(
 		event: EventName<K & string>,
-		callback: (patches: Patches<true>) => void,
+		callback: (patches: Patches) => void,
 	): () => void {
 		return this.emitter.on(event, callback);
 	}
@@ -155,7 +153,7 @@ export class ObservableStore<T extends Record<string, NonPrimitive>> {
 	 */
 	public off<K extends keyof T>(
 		event: EventName<K & string>,
-		callback: (patches: Patches<true>) => void,
+		callback: (patches: Patches) => void,
 	): void {
 		this.emitter.off(event, callback);
 	}
@@ -179,7 +177,7 @@ export class ObservableStore<T extends Record<string, NonPrimitive>> {
 	 */
 	public once<K extends keyof T>(
 		event: EventName<K & string>,
-		callback: (patches: Patches<true>) => void,
+		callback: (patches: Patches) => void,
 	): () => void {
 		return this.emitter.once(event, callback);
 	}
@@ -205,7 +203,7 @@ export class ObservableStore<T extends Record<string, NonPrimitive>> {
 	public onKeyed<K extends keyof T>(
 		event: EventName<K & string>,
 		key: Key,
-		callback: (patches: Patches<true>) => void,
+		callback: (patches: Patches) => void,
 	): () => void;
 
 	/**
@@ -223,7 +221,7 @@ export class ObservableStore<T extends Record<string, NonPrimitive>> {
 	 *   console.log(`User ${userId} changed:`, patches);
 	 * });
 	 *
-	 * // Subscribe to all todo changes (index is inferred as string)
+	 * // Subscribe to all todo changes (index is inferred as number)
 	 * const unsubscribe = store.onKeyed('todos:updated', '*', (index, patches) => {
 	 *   console.log(`Todo at index ${index} changed:`, patches);
 	 * });
@@ -234,7 +232,7 @@ export class ObservableStore<T extends Record<string, NonPrimitive>> {
 	public onKeyed<K extends keyof T>(
 		event: EventName<K & string>,
 		key: '*',
-		callback: (key: ExtractKeyType<T[K]>, patches: Patches<true>) => void,
+		callback: (key: ExtractKeyType<T[K]>, patches: Patches) => void,
 	): () => void;
 
 	/** @internal */
@@ -265,10 +263,10 @@ export class ObservableStore<T extends Record<string, NonPrimitive>> {
 	 */
 	public offKeyed<K extends keyof T>(
 		event: EventName<K & string>,
-		key: PropertyKey,
-		callback: (patches: Patches<true>) => void,
+		key: Key,
+		callback: (patches: Patches) => void,
 	): void {
-		// Type assertions needed due to TypeScript limitations with PropertyKey and generic string literals
+		// Type assertions needed due to TypeScript limitations with Key and generic string literals
 		this.emitter.offKeyed(event as any, key as any, callback as any);
 	}
 
@@ -293,7 +291,7 @@ export class ObservableStore<T extends Record<string, NonPrimitive>> {
 	public onceKeyed<K extends keyof T>(
 		event: EventName<K & string>,
 		key: Key,
-		callback: (patches: Patches<true>) => void,
+		callback: (patches: Patches) => void,
 	): () => void;
 
 	/**
@@ -322,7 +320,7 @@ export class ObservableStore<T extends Record<string, NonPrimitive>> {
 	public onceKeyed<K extends keyof T>(
 		event: EventName<K & string>,
 		key: '*',
-		callback: (key: ExtractKeyType<T[K]>, patches: Patches<true>) => void,
+		callback: (key: ExtractKeyType<T[K]>, patches: Patches) => void,
 	): () => void;
 
 	/** @internal */
@@ -412,8 +410,8 @@ export class ObservableStore<T extends Record<string, NonPrimitive>> {
 	 * @param patches - Array of JSON patches
 	 * @returns Set of unique keys found in patch paths
 	 */
-	private extractKeysFromPatches(patches: Patches<true>): Set<PropertyKey> {
-		const keys = new Set<PropertyKey>();
+	private extractKeysFromPatches(patches: Patches): Set<Key> {
+		const keys = new Set<Key>();
 		for (const patch of patches) {
 			if (patch.path.length > 0) {
 				keys.add(patch.path[0]);

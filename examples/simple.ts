@@ -1,6 +1,4 @@
-import {create} from 'mutative';
-import {createObservableStoreFactory, mutativeAdapter} from '../src/index.js';
-const createObservableStore = createObservableStoreFactory(mutativeAdapter(create));
+import {createObservableStore} from '../src/index.js';
 
 const emitter = createObservableStore({
 	user: {

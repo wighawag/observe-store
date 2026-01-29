@@ -1,7 +1,6 @@
 import type {Patches} from '../src/types.js';
 import {create} from 'mutative';
-import {createObservableStoreFactory, mutativeAdapter} from '../src/index.js';
-const createObservableStore = createObservableStoreFactory(mutativeAdapter(create));
+import {createObservableStore} from '../src/index.js';
 
 // Example 1: User management with keyed events
 console.log('=== Example 1: User Management ===');
@@ -130,8 +129,8 @@ const productStore = createObservableStore<{
 	products: Record<string, {name: string; price: number}>;
 }>({products: {}});
 
-const callback1 = (patches: Patches<true>) => console.log('Callback 1 - Product changed:', patches);
-const callback2 = (patches: Patches<true>) => console.log('Callback 2 - Product changed:', patches);
+const callback1 = (patches: Patches) => console.log('Callback 1 - Product changed:', patches);
+const callback2 = (patches: Patches) => console.log('Callback 2 - Product changed:', patches);
 
 productStore.onKeyed('products:updated', 'product-1', callback1);
 productStore.onKeyed('products:updated', 'product-1', callback2);

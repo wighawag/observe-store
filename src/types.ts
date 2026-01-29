@@ -16,23 +16,23 @@ export type EventNames<T extends Record<string, NonPrimitive>> = {
 	[K in keyof T]: EventName<K & string>;
 }[keyof T];
 
-export type Key = string | number; // TODO native PropertyKey (which include Symbol)?
+export type Key = string | number | symbol | object;
 
 /**
  * Extract key type from a field type
  * - For Record<K, V>, extracts K as the key type (constrained to Key)
- * - For Array<V>, extracts string as the key type (mutative converts indices to strings in patches)
+ * - For Array<V>, extracts number as the key type (array indices)
  * - For other types, falls back to string
  *
  * Note: JSON Patch paths only support string and number, not symbol
  */
 export type ExtractKeyType<T> =
-	T extends Record<infer K, any>
-		? K extends Key
-			? K
-			: string
-		: T extends Array<any>
-			? string
+	T extends Array<any>
+		? number
+		: T extends Record<infer K, any>
+			? K extends Key
+				? K
+				: string
 			: string;
 
 /**
@@ -42,7 +42,7 @@ export type ExtractKeyType<T> =
 export type KeyedObservableEventMap<T extends Record<string, NonPrimitive>> = KeyedEventMap<{
 	[K in keyof T as EventName<K & string>]: {
 		id: ExtractKeyType<T[K]>;
-		data: Patches<true>;
+		data: Patches;
 	};
 }>;
 
@@ -100,43 +100,41 @@ export const Operation = {
 
 export type PatchOp = (typeof Operation)[keyof typeof Operation];
 
-export type PatchesOptions =
-	| boolean
-	| {
-			/**
-			 * The default value is `true`. If it's `true`, the path will be an array, otherwise it is a string.
-			 */
-			pathAsArray?: boolean;
-			/**
-			 * The default value is `true`. If it's `true`, the array length will be included in the patches, otherwise no include array length.
-			 */
-			arrayLengthAssignment?: boolean;
-	  };
+/**
+ * Function that extracts an ID from an item value
+ */
+export type GetItemIdFunction = (value: any) => string | number | undefined | null;
 
-export interface IPatch {
+/**
+ * Recursive configuration for getItemId - can be a function or nested object
+ */
+export type GetItemIdConfig = {
+	[key: string]: GetItemIdFunction | GetItemIdConfig;
+};
+
+export type PatchPath = (string | number | symbol | object)[];
+
+export type Patch = {
+	path: PatchPath;
 	op: PatchOp;
 	value?: any;
-}
+	/**
+	 * Optional ID of the item being removed or replaced.
+	 * Populated when getItemId option is configured for the item's parent path.
+	 */
+	id?: string | number;
+};
 
-export type Patch<P extends PatchesOptions = true> = P extends {
-	pathAsArray: false;
-}
-	? IPatch & {
-			path: string;
-		}
-	: P extends true | object
-		? IPatch & {
-				path: (string | number)[];
-			}
-		: IPatch & {
-				path: string | (string | number)[];
-			};
-
-export type Patches<P extends PatchesOptions = true> = Patch<P>[];
+export type Patches = Patch[];
 
 export type Draft<T> = T;
 
-export type CreateFunction = <T extends NonPrimitive, P extends PatchesOptions = true>(
+export type RecordPatchesFunction = <T extends NonPrimitive>(
 	state: T,
 	mutate: (state: Draft<T>) => void,
-) => [T, Patches<P>];
+) => Patches;
+
+export type CreateFunction = <T extends NonPrimitive>(
+	state: T,
+	mutate: (state: Draft<T>) => void,
+) => [T, Patches];

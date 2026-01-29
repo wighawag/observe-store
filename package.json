@@ -43,7 +43,7 @@
 	],
 	"sideEffects": false,
 	"dependencies": {
-		"patch-recorder": "^0.1.0",
+		"patch-recorder": "^0.2.0",
 		"radiate": "^0.3.1"
 	},
 	"devDependencies": {
@@ -52,7 +52,7 @@
 		"prettier": "^3.8.0",
 		"tsx": "^4.21.0",
 		"typescript": "^5.3.3",
-		"vitest": "^2.1.8"
+		"vitest": "^4.0.18"
 	},
 	"scripts": {
 		"format": "prettier --write .",
