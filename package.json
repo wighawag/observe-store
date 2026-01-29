@@ -1,7 +1,7 @@
 {
 	"name": "observator",
 	"version": "0.0.1",
-	"description": "",
+	"description": "Type-safe observable store that emits events for each top-level field change with JSON Patch arrays.",
 	"keywords": [
 		"store",
 		"reactive",
